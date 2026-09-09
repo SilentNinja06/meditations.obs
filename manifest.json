@@ -1,0 +1,10 @@
+{
+	"id": "meridian-meditations",
+	"name": "Meridian Discipline",
+	"version": "0.1.0",
+	"minAppVersion": "1.4.0",
+	"description": "Phase-aware meditation & discipline practice: a guided session runner, a digital candle anchor, post-session logging, and lightweight stats. Stoicism, mindfulness, and breath regulation under one frame. Mobile-first, no network.",
+	"author": "Sam Barker",
+	"authorUrl": "https://github.com/SilentNinja06",
+	"isDesktopOnly": false
+}
