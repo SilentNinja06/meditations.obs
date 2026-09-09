@@ -25,10 +25,11 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // src/main.ts
 var main_exports = {};
 __export(main_exports, {
+  DISCIPLINE_CHANGED_EVENT: () => DISCIPLINE_CHANGED_EVENT,
   default: () => MeridianMeditationsPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian9 = require("obsidian");
+var import_obsidian10 = require("obsidian");
 
 // ../../packages/ui/dist/modal.js
 var import_obsidian = require("obsidian");
@@ -199,6 +200,15 @@ function sessionsThisWeek(sessions, today) {
   }
   return n;
 }
+function countOnDay(timestamps, today) {
+  const key = dayKey(today);
+  let n = 0;
+  for (const ts of timestamps) {
+    const t = Date.parse(ts);
+    if (!Number.isNaN(t) && dayKey(new Date(t)) === key) n++;
+  }
+  return n;
+}
 function mondayOf(d) {
   const s = startOfDay(d);
   const dow = (s.getDay() + 6) % 7;
@@ -209,6 +219,16 @@ function avgReturn(sessions) {
   const scores = recent.map((s) => s.returnScore).filter((v) => v != null);
   if (scores.length === 0) return null;
   return scores.reduce((a, b) => a + b, 0) / scores.length;
+}
+
+// ../../packages/meditations-core/src/bookend.ts
+function dueBookend(now, todays) {
+  const h = now.getHours();
+  const hasMorning = !!(todays == null ? void 0 : todays.intention);
+  const hasEvening = !!((todays == null ? void 0 : todays.reviewWin) || (todays == null ? void 0 : todays.reviewSlip) || (todays == null ? void 0 : todays.reviewAdjust));
+  if (h < 12 && !hasMorning) return "morning";
+  if (h >= 18 && !hasEvening) return "evening";
+  return null;
 }
 
 // src/settings.ts
@@ -930,14 +950,6 @@ var LogModal = class extends import_obsidian6.Modal {
 
 // src/bookend.ts
 var import_obsidian7 = require("obsidian");
-function dueBookend(now, todays) {
-  const h = now.getHours();
-  const hasMorning = !!(todays == null ? void 0 : todays.intention);
-  const hasEvening = !!((todays == null ? void 0 : todays.reviewWin) || (todays == null ? void 0 : todays.reviewSlip) || (todays == null ? void 0 : todays.reviewAdjust));
-  if (h < 12 && !hasMorning) return "morning";
-  if (h >= 18 && !hasEvening) return "evening";
-  return null;
-}
 var BookendModal = class extends import_obsidian7.Modal {
   constructor(app, plugin, mode, onSaved) {
     var _a;
@@ -1059,18 +1071,60 @@ var DisciplineView = class extends import_obsidian8.ItemView {
     if (!d.startedOn) this.renderStartPrompt(card);
     const stats = card.createDiv({ cls: "mrm-stats" });
     const done = d.sessions.some((s) => dayKey(new Date(s.date)) === dayKey(now));
+    const pausesToday = countOnDay(d.pauses, now);
     this.stat(stats, "Streak", `${streak(d.sessions, now)}d`);
     this.stat(stats, "This week", String(sessionsThisWeek(d.sessions, now)));
     const avg = avgReturn(d.sessions);
     this.stat(stats, "Avg return", avg == null ? "\u2014" : avg.toFixed(1));
-    this.stat(stats, "Today", done ? "\u2713 sat" : "\u2014");
-    const begin = card.createEl("button", { cls: "mrm-begin mod-cta" });
+    this.stat(stats, "Pauses", String(pausesToday));
+    this.renderWeekStrip(card, now);
+    const actions = card.createDiv({ cls: "mrm-actions-row" });
+    const begin = actions.createEl("button", { cls: "mrm-begin mod-cta" });
     (0, import_obsidian8.setIcon)(begin.createSpan({ cls: "mrm-begin-icon" }), "flame");
     begin.createSpan({ text: done ? "Sit again" : "Begin session" });
     begin.onclick = () => this.beginSession();
+    const pause = actions.createEl("button", { cls: "mrm-pill" });
+    (0, import_obsidian8.setIcon)(pause.createSpan({ cls: "mrm-begin-icon" }), "hand");
+    pause.createSpan({ text: "Pause" });
+    pause.onclick = () => this.plugin.openPause();
+    const candle = actions.createEl("button", { cls: "mrm-pill" });
+    (0, import_obsidian8.setIcon)(candle.createSpan({ cls: "mrm-begin-icon" }), "flame");
+    candle.createSpan({ text: "Candle" });
+    candle.onclick = () => void this.plugin.openCandle();
     const foot = card.createDiv({ cls: "mrm-offcushion" });
     foot.createSpan({ cls: "mrm-offcushion-label", text: "Off-cushion" });
-    foot.createSpan({ text: OFF_CUSHION_REMINDER });
+    foot.createSpan({ text: pausesToday > 0 ? `${pausesToday} deliberate pause${pausesToday === 1 ? "" : "s"} today. ${OFF_CUSHION_REMINDER}` : OFF_CUSHION_REMINDER });
+    this.renderRecent(root, d.sessions);
+  }
+  /** Seven dots, oldest→today; filled when a session was logged that day. */
+  renderWeekStrip(card, now) {
+    const strip = card.createDiv({ cls: "mrm-weekstrip" });
+    const dayKeys = new Set(this.plugin.data.sessions.map((s) => dayKey(new Date(s.date))));
+    for (let i = 6; i >= 0; i--) {
+      const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+      const dot = strip.createDiv({ cls: "mrm-weekdot" });
+      dot.toggleClass("is-filled", dayKeys.has(dayKey(day)));
+      dot.toggleClass("is-today", i === 0);
+      dot.setAttribute("aria-label", dayKey(day));
+    }
+  }
+  renderRecent(root, sessions) {
+    if (sessions.length === 0) return;
+    root.createEl("h4", { cls: "mrm-section-h", text: "Recent sessions" });
+    const list = root.createDiv({ cls: "mrm-log-list" });
+    const recent = [...sessions].sort((a, b) => Date.parse(b.date) - Date.parse(a.date)).slice(0, 8);
+    for (const s of recent) {
+      const row = list.createDiv({ cls: "mrm-log-row" });
+      const t = Date.parse(s.date);
+      row.createSpan({ cls: "mrm-log-date", text: Number.isNaN(t) ? s.date : dayKey(new Date(t)) });
+      const meta = row.createDiv({ cls: "mrm-log-meta" });
+      meta.createSpan({ cls: "mrm-badge", text: `${s.durationMin}m` });
+      meta.createSpan({ cls: "mrm-badge", text: s.anchor });
+      if (s.returnScore != null) meta.createSpan({ cls: "mrm-badge", text: `\u21A9 ${s.returnScore}` });
+      if (s.rep) meta.createSpan({ cls: "mrm-badge", text: DISCIPLINES[s.rep].title });
+      if (s.offCushionPause) meta.createSpan({ cls: "mrm-badge mrm-badge-accent", text: "pause" });
+      if (s.note) row.createDiv({ cls: "mrm-log-note", text: s.note });
+    }
   }
   renderOnboarding(root) {
     const box = root.createDiv({ cls: "mrm-onboard" });
@@ -1120,6 +1174,71 @@ var DisciplineView = class extends import_obsidian8.ItemView {
   }
 };
 
+// src/pausemodal.ts
+var import_obsidian9 = require("obsidian");
+var PauseModal = class extends import_obsidian9.Modal {
+  constructor(app, plugin, onDone) {
+    super(app);
+    this.plugin = plugin;
+    this.onDone = onDone;
+    this.candle = null;
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.addClass("mrm-pause");
+    contentEl.createEl("h3", { text: "Pause" });
+    contentEl.createDiv({ cls: "mrm-pause-script", text: OFF_CUSHION_REMINDER });
+    const prompts = contentEl.createDiv({ cls: "mrm-pause-prompts" });
+    prompts.createDiv({ cls: "mrm-rep-prompt", text: DISCIPLINES.urge.prompt });
+    prompts.createDiv({ cls: "mrm-rep-prompt", text: DISCIPLINES.cthia.prompt });
+    const s = this.plugin.cfg();
+    const stage = contentEl.createDiv({ cls: "mrm-pause-stage", attr: { hidden: "" } });
+    let pacing = false;
+    const pace = new import_obsidian9.Setting(contentEl).setName("Breathe with it").setDesc(`Extended exhale (in ${s.breathInSec} / out ${s.breathOutSec}).`);
+    pace.addButton(
+      (b) => b.setButtonText("Start").onClick(() => {
+        if (!pacing) {
+          stage.removeAttribute("hidden");
+          const prefs = {
+            brightness: s.candleBrightness,
+            size: Math.min(s.candleSize, 1),
+            motion: initialMotion(s.defaultMotion, contentEl.ownerDocument),
+            breathInSec: s.breathInSec,
+            breathOutSec: s.breathOutSec
+          };
+          this.candle = new CandleComponent(stage, prefs);
+          this.candle.startBreath();
+          b.setButtonText("Stop");
+          pacing = true;
+        } else {
+          this.teardownCandle();
+          stage.setAttribute("hidden", "");
+          b.setButtonText("Start");
+          pacing = false;
+        }
+      })
+    );
+    new import_obsidian9.Setting(contentEl).addButton((b) => b.setButtonText("Close").onClick(() => this.close())).addButton(
+      (b) => b.setButtonText("I held the pause").setCta().onClick(() => void this.log())
+    );
+  }
+  async log() {
+    await this.plugin.addPause();
+    this.close();
+    this.onDone();
+  }
+  teardownCandle() {
+    var _a;
+    (_a = this.candle) == null ? void 0 : _a.destroy();
+    this.candle = null;
+  }
+  onClose() {
+    this.teardownCandle();
+    this.contentEl.empty();
+  }
+};
+
 // src/main.ts
 function mergeData(raw) {
   var _a, _b, _c, _d, _e, _f, _g, _h;
@@ -1140,10 +1259,12 @@ function mergeData(raw) {
     phaseOverride: (_h = r.phaseOverride) != null ? _h : null,
     sessions: Array.isArray(r.sessions) ? r.sessions : [],
     bookends: Array.isArray(r.bookends) ? r.bookends : [],
+    pauses: Array.isArray(r.pauses) ? r.pauses : [],
     settings
   };
 }
-var MeridianMeditationsPlugin = class extends import_obsidian9.Plugin {
+var DISCIPLINE_CHANGED_EVENT = "meridian-discipline:changed";
+var MeridianMeditationsPlugin = class extends import_obsidian10.Plugin {
   constructor() {
     super(...arguments);
     this.data = mergeData(null);
@@ -1162,8 +1283,14 @@ var MeridianMeditationsPlugin = class extends import_obsidian9.Plugin {
     this.addRibbonIcon("flame", "Meridian Discipline", () => void this.openDiscipline());
     this.addCommand({ id: "open-discipline", name: "Open Meridian Discipline", callback: () => void this.openDiscipline() });
     this.addCommand({ id: "begin-session", name: "Begin a session", callback: () => this.beginSession() });
+    this.addCommand({ id: "pause", name: "Off-cushion pause", callback: () => this.openPause() });
     this.addCommand({ id: "bookend", name: "Phase 3 bookend (intention / review)", callback: () => this.openBookend() });
     this.addCommand({ id: "open-candle", name: "Open the digital candle", callback: () => void this.openCandle() });
+  }
+  /** The in-the-moment off-cushion pause — the practice's real target. Usable
+   * from anywhere (a command, the dashboard, or the Regulation Log card). */
+  openPause() {
+    new PauseModal(this.app, this, () => this.refresh()).open();
   }
   /** Open the day's due bookend — morning before noon, evening after 6pm; falls
    * back to whichever half the clock is in. */
@@ -1190,6 +1317,12 @@ var MeridianMeditationsPlugin = class extends import_obsidian9.Plugin {
   async saveData_() {
     await this.saveData(this.data);
   }
+  /** Persist and notify: refresh our own views + fire the cross-plugin event. */
+  async commit() {
+    await this.saveData_();
+    this.refresh();
+    this.app.workspace.trigger(DISCIPLINE_CHANGED_EVENT);
+  }
   async updateSettings(patch) {
     this.data.settings = { ...this.data.settings, ...patch };
     await this.saveData_();
@@ -1197,14 +1330,19 @@ var MeridianMeditationsPlugin = class extends import_obsidian9.Plugin {
   // ---- session + bookend records ----
   async addSession(session) {
     this.data.sessions.push(session);
-    await this.saveData_();
+    await this.commit();
     if (this.cfg().writeThroughEnabled) await this.writeThrough(session);
   }
   async upsertBookend(bookend) {
     const i = this.data.bookends.findIndex((b) => b.date === bookend.date);
     if (i >= 0) this.data.bookends[i] = { ...this.data.bookends[i], ...bookend };
     else this.data.bookends.push(bookend);
-    await this.saveData_();
+    await this.commit();
+  }
+  /** Record a deliberate off-cushion pause (the actual target of the practice). */
+  async addPause() {
+    this.data.pauses.push((/* @__PURE__ */ new Date()).toISOString());
+    await this.commit();
   }
   bookendFor(dayKey2) {
     return this.data.bookends.find((b) => b.date === dayKey2);
@@ -1217,7 +1355,7 @@ var MeridianMeditationsPlugin = class extends import_obsidian9.Plugin {
     const path = this.cfg().writeThroughPath.trim();
     if (!path) return;
     try {
-      const p = (0, import_obsidian9.normalizePath)(path.replace(/\.md$/i, "") + ".md");
+      const p = (0, import_obsidian10.normalizePath)(path.replace(/\.md$/i, "") + ".md");
       const fields = [
         `- practice_min:: ${session.durationMin}`,
         `  practice_anchor:: ${session.anchor}`,
@@ -1230,7 +1368,7 @@ var MeridianMeditationsPlugin = class extends import_obsidian9.Plugin {
 ${fields}
 `;
       const existing = this.app.vault.getAbstractFileByPath(p);
-      if (existing instanceof import_obsidian9.TFile) {
+      if (existing instanceof import_obsidian10.TFile) {
         await this.app.vault.append(existing, block);
       } else {
         const dir = p.split("/").slice(0, -1).join("/");
@@ -1241,7 +1379,7 @@ ${block}`);
       }
     } catch (e) {
       console.error("Meridian Discipline: write-through failed", e);
-      new import_obsidian9.Notice("Discipline: couldn't write to the log note (kept in the plugin).");
+      new import_obsidian10.Notice("Discipline: couldn't write to the log note (kept in the plugin).");
     }
   }
   async openCandle() {

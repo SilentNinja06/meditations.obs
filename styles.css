@@ -277,6 +277,86 @@
 .mrm-start-prompt .mrm-pill {
 	margin-left: auto;
 }
+.mrm-actions-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	align-items: center;
+}
+.mrm-actions-row .mrm-begin {
+	flex: 1 1 auto;
+}
+.mrm-actions-row .mrm-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+}
+.mrm-weekstrip {
+	display: flex;
+	gap: 0.4rem;
+	justify-content: center;
+}
+.mrm-weekdot {
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-primary);
+}
+.mrm-weekdot.is-filled {
+	background: var(--interactive-accent);
+	border-color: var(--interactive-accent);
+}
+.mrm-weekdot.is-today {
+	outline: 2px solid var(--text-accent);
+	outline-offset: 1px;
+}
+
+/* recent sessions log */
+.mrm-section-h {
+	margin: 0.9rem 0 0.4rem;
+	color: var(--text-muted);
+	font-size: 0.85em;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+.mrm-log-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+}
+.mrm-log-row {
+	background: var(--background-secondary);
+	border-radius: 8px;
+	padding: 0.45rem 0.6rem;
+}
+.mrm-log-date {
+	font-variant-numeric: tabular-nums;
+	font-weight: 600;
+	margin-right: 0.5rem;
+}
+.mrm-log-meta {
+	display: inline-flex;
+	flex-wrap: wrap;
+	gap: 0.3rem;
+	vertical-align: middle;
+}
+.mrm-badge {
+	font-size: 0.72em;
+	background: var(--background-modifier-hover);
+	border-radius: 6px;
+	padding: 0.05rem 0.35rem;
+	color: var(--text-muted);
+}
+.mrm-badge-accent {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+.mrm-log-note {
+	font-size: 0.85em;
+	color: var(--text-muted);
+	margin-top: 0.25rem;
+}
 
 /* ---- bookend ---- */
 .mrm-bookend-nudge {
@@ -306,4 +386,26 @@
 	font-size: 0.82em;
 	color: var(--text-muted);
 	margin: 0.4rem 0 0.1rem;
+}
+
+/* ---- pause micro-practice ---- */
+.mrm-pause-script {
+	background: var(--background-secondary);
+	border-left: 3px solid var(--interactive-accent);
+	border-radius: 8px;
+	padding: 0.6rem 0.75rem;
+	font-size: 1.02em;
+	margin-bottom: 0.6rem;
+}
+.mrm-pause-prompts {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+	margin-bottom: 0.4rem;
+}
+.mrm-pause-stage {
+	height: 240px;
+	max-height: 42vh;
+	display: flex;
+	margin: 0.4rem 0;
 }
